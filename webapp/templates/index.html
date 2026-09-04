@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bàn Kiểm Định — Nhận diện biển báo giao thông VN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="window">
+
+  <div class="titlebar">
+    <div class="app"><span class="dot" id="statusDot"></span> <span id="statusText">Đang kết nối model…</span></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="detect">Nhận diện ảnh</button>
+      <button class="tab" data-tab="evaluate">Đánh giá mô hình</button>
+    </div>
+    <div class="field" style="display:flex; align-items:center; gap:10px;">
+      👤 {{ username }}
+      <a href="{{ url_for('logout') }}" style="color:var(--ink-mute); text-decoration:none;">· Đăng xuất</a>
+    </div>
+  </div>
+
+  <!-- ============== TAB 1: NHẬN DIỆN ẢNH ============== -->
+  <section id="tab-detect" class="tab-panel active">
+
+    <div class="toolbar">
+      <label class="btn" for="fileInput">📁 Chọn ảnh</label>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      <button class="btn primary" id="runBtn" disabled>▶ Chạy nhận diện</button>
+      <div class="sep"></div>
+      <div class="thresh">
+        Ngưỡng tin cậy
+        <input type="range" id="confRange" min="0.05" max="0.95" step="0.05" value="0.5">
+        <b id="confVal">0.50</b>
+      </div>
+      <div class="spacer"></div>
+      <div class="field" id="fileNameField">Chưa chọn ảnh</div>
+    </div>
+
+    <div class="body">
+      <div class="canvas-wrap">
+        <div class="canvas" id="canvas">
+          <div class="placeholder" id="placeholder">Chọn một ảnh để bắt đầu nhận diện</div>
+          <img id="resultImg" style="display:none;">
+        </div>
+        <div class="canvas-foot">
+          <span id="imgMeta">—</span>
+          <span id="inferTime"></span>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="sb-head">
+          <h2>Kết quả nhận diện</h2>
+          <span class="count" id="detCount">—</span>
+        </div>
+        <div id="detList" class="det-list">
+          <div class="empty-note">Chưa có kết quả. Chọn ảnh và bấm "Chạy nhận diện".</div>
+        </div>
+
+        <div class="group-dist">
+          <h3>Phân bố theo nhóm (ảnh hiện tại)</h3>
+          <div class="bars" id="groupBars"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== TAB 2: ĐÁNH GIÁ MÔ HÌNH ============== -->
+  <section id="tab-evaluate" class="tab-panel">
+    <div class="eval-toolbar">
+      <div class="field">Tập dữ liệu: <b>data/test</b> (theo data.yaml)</div>
+      <div class="spacer"></div>
+      <button class="btn primary" id="evalBtn">▶ Chạy đánh giá trên tập test</button>
+    </div>
+
+    <div class="eval-body" id="evalBody">
+      <div class="empty-note" id="evalEmpty">
+        Bấm "Chạy đánh giá" để tính Precision / Recall / mAP thật bằng <code>model.val()</code>
+        của Ultralytics trên tập <code>data/test</code>. Lần chạy đầu có thể mất một lúc tuỳ số lượng ảnh.
+      </div>
+
+      <div id="evalResults" style="display:none;">
+        <div class="kpis">
+          <div class="kpi blue"><div class="label">Precision</div><div class="value" id="kpiP">—</div></div>
+          <div class="kpi green"><div class="label">Recall</div><div class="value" id="kpiR">—</div></div>
+          <div class="kpi amber"><div class="label">mAP@0.5</div><div class="value" id="kpiMap50">—</div></div>
+          <div class="kpi red"><div class="label">mAP@0.5:0.95</div><div class="value" id="kpiMap5095">—</div></div>
+        </div>
+
+        <div class="eval-grid">
+          <div class="panel">
+            <h2>Ma trận nhầm lẫn <span id="evalMeta"></span></h2>
+            <img id="cmImg" style="max-width:100%; border-radius:10px; border:1px solid var(--line);">
+          </div>
+          <div class="panel">
+            <h2>10 lớp có AP@0.5 thấp nhất <span>cần thêm dữ liệu / xem lại nhãn</span></h2>
+            <table>
+              <tr><th>Mã biển</th><th>Nhóm</th><th>AP@0.5</th></tr>
+              <tbody id="worstTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="statusbar">
+    <span id="modelStatus">● Đang kiểm tra model…</span>
+    <span id="classCount"></span>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

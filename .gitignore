@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+runs/
+outputs/predictions/*
+outputs/reports/*
+!outputs/predictions/.gitkeep
+!outputs/reports/.gitkeep
+.idea/
+*.pt
+data/raw/*
+!data/raw/.gitkeep

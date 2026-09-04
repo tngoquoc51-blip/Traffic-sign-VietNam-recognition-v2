@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giới thiệu hệ thống — TrafficVision AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  :root{
+    --bg:#0B0C15; --panel:#14151F; --panel-2:#1B1D2A; --line:#242637;
+    --ink:#F2F3F7; --ink-mute:#8B8FA3;
+    --violet:#8B5CF6; --violet-dark:#6D4AEA;
+    --pink:#F2467A; --amber:#F6A623; --blue:#4A9BFA; --cyan:#28D9E8; --teal:#2DD4A6; --slate:#6B7280;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); font-family:'Inter',sans-serif; color:var(--ink); margin:0;}
+  .ab-app{display:grid; grid-template-columns:80px 1fr; min-height:100vh;}
+  .ab-rail{background:#0E0F19; border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:22px 0; gap:18px;}
+  .ab-rail .mark{width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg, var(--violet), var(--violet-dark)); display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk'; font-weight:800; color:#fff; font-size:13px;}
+  .ab-rail nav{display:flex; flex-direction:column; gap:14px; margin-top:10px;}
+  .ab-rail nav a{width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; color:#5C6178; font-size:16px; text-decoration:none;}
+  .ab-rail nav a.active{background:rgba(139,92,246,.15); color:var(--violet);}
+
+  .ab-main{padding:36px clamp(24px,4vw,64px) 80px; position:relative;}
+  .ab-main::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:520px; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(680px 340px at 15% 0%, rgba(139,92,246,.14), transparent 60%),
+      radial-gradient(560px 300px at 85% 8%, rgba(40,217,232,.10), transparent 60%);
+  }
+  .ab-container{max-width:1180px; margin:0 auto; position:relative; z-index:1;}
+
+  .ab-eyebrow{display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono'; font-size:11px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px;}
+  .ab-eyebrow .dot{width:6px; height:6px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px var(--teal);}
+  .ab-topbar{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px; flex-wrap:wrap; gap:14px;}
+  .ab-topbar h1{font-family:'Space Grotesk'; font-weight:800; font-size:32px; letter-spacing:-.01em;}
+  .ab-btn{font-family:'Inter'; font-weight:600; font-size:13px; padding:10px 16px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; transition:border-color .15s ease;}
+  .ab-btn:hover{border-color:var(--violet);}
+
+  /* ---- Hero ---- */
+  .ab-hero{
+    background:linear-gradient(135deg, rgba(139,92,246,.16), rgba(40,217,232,.07));
+    border:1px solid var(--line); border-radius:22px; padding:38px 36px; margin-bottom:24px;
+    position:relative; overflow:hidden;
+  }
+  .ab-hero-badge{
+    display:inline-flex; align-items:center; gap:8px; font-family:'IBM Plex Mono'; font-size:11px;
+    font-weight:600; color:var(--violet); background:rgba(139,92,246,.14); border:1px solid rgba(139,92,246,.3);
+    padding:6px 14px; border-radius:999px; margin-bottom:18px;
+  }
+  .ab-hero h2{font-family:'Space Grotesk'; font-weight:800; font-size:22px; margin-bottom:14px; letter-spacing:-.01em;}
+  .ab-hero p{color:var(--ink-mute); font-size:14.5px; line-height:1.8; max-width:760px;}
+  .ab-hero p b{color:var(--ink); font-weight:700;}
+  .ab-hero .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:28px;}
+  .ab-hero .stat{
+    background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+  }
+  .ab-hero .stat b{
+    display:block; font-family:'Space Grotesk'; font-weight:800; font-size:26px; margin-bottom:4px;
+    background:linear-gradient(90deg, var(--violet), var(--cyan)); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .ab-hero .stat span{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:.04em;}
+
+  .ab-panel{background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:28px; margin-bottom:22px;}
+  .ab-panel-head{display:flex; align-items:center; gap:12px; margin-bottom:22px;}
+  .ab-panel-icon{
+    width:34px; height:34px; border-radius:10px; flex-shrink:0;
+    background:rgba(139,92,246,.14); display:flex; align-items:center; justify-content:center; color:var(--violet);
+  }
+  .ab-panel h2{font-family:'Space Grotesk'; font-weight:700; font-size:17px;}
+  .ab-panel .sub{color:var(--ink-mute); font-size:12px; margin-top:2px;}
+
+  /* ---- Sơ đồ khối (pipeline) ---- */
+  .pipeline{display:grid; grid-template-columns:repeat(5,1fr); gap:0; position:relative;}
+  .pipeline::before{
+    content:''; position:absolute; top:38px; left:38px; right:38px; height:2px; z-index:0;
+    background:repeating-linear-gradient(90deg, var(--line) 0 8px, transparent 8px 14px);
+  }
+  .pipe-step{position:relative; z-index:1; text-align:center; padding:0 8px;}
+  .pipe-step .icon{
+    width:64px; height:64px; border-radius:18px; margin:0 auto 16px;
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    box-shadow:0 10px 26px -8px rgba(0,0,0,.5);
+  }
+  .pipe-step .icon svg{width:26px; height:26px;}
+  .pipe-step .step-no{
+    font-family:'IBM Plex Mono'; font-size:10px; color:var(--ink-mute); letter-spacing:.08em; margin-bottom:6px;
+  }
+  .pipe-step .title{font-family:'Space Grotesk'; font-weight:700; font-size:13.5px; margin-bottom:6px;}
+  .pipe-step .desc{font-size:11px; color:var(--ink-mute); line-height:1.55;}
+
+  /* ---- Kiến trúc phân tầng ---- */
+  .arch-stack{display:flex; flex-direction:column; gap:12px;}
+  .arch-tier{
+    border-radius:16px; padding:18px 22px; border:1px solid var(--line); position:relative;
+    display:flex; align-items:center; gap:16px;
+  }
+  .arch-tier .tier-icon{
+    width:44px; height:44px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff;
+  }
+  .arch-tier .tier-icon svg{width:20px; height:20px;}
+  .arch-tier .tier-name{font-family:'Space Grotesk'; font-weight:700; font-size:14.5px; margin-bottom:3px;}
+  .arch-tier .tier-desc{font-size:12px; color:var(--ink-mute); line-height:1.6;}
+  .arch-connector{display:flex; justify-content:center; color:var(--ink-mute); opacity:.5; margin:-4px 0;}
+  .arch-tier.t1{background:rgba(246,166,35,.07); border-color:rgba(246,166,35,.25);}
+  .arch-tier.t1 .tier-icon{background:linear-gradient(135deg,var(--amber),#B5780F);}
+  .arch-tier.t2{background:rgba(139,92,246,.07); border-color:rgba(139,92,246,.25);}
+  .arch-tier.t2 .tier-icon{background:linear-gradient(135deg,var(--violet),var(--violet-dark));}
+  .arch-tier.t3{background:rgba(40,217,232,.07); border-color:rgba(40,217,232,.25); flex-wrap:wrap;}
+  .arch-tier.t3 .tier-icon{background:linear-gradient(135deg,var(--cyan),#1B9FB0);}
+  .arch-tier .t3-chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
+  .t3-chip{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); background:var(--panel-2); border:1px solid var(--line); padding:4px 10px; border-radius:8px;}
+
+  /* ---- Tech stack ---- */
+  .stack-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  .stack-card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:16px; padding:18px;
+    display:flex; align-items:center; gap:12px; transition:border-color .15s ease, transform .15s ease;
+  }
+  .stack-card:hover{border-color:var(--violet); transform:translateY(-2px);}
+  .stack-card .stack-icon{
+    width:38px; height:38px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(139,92,246,.14); color:var(--violet);
+  }
+  .stack-card .stack-icon svg{width:18px; height:18px;}
+  .stack-card .l{font-family:'IBM Plex Mono'; font-size:9.5px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:.05em;}
+  .stack-card .v{font-family:'Space Grotesk'; font-weight:700; font-size:14px; margin-top:3px;}
+
+  /* ---- Nhóm biển báo — hình dạng thật ---- */
+  .group-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:14px;}
+  .group-card{
+    border-radius:16px; padding:20px 14px; border:1px solid var(--line); background:var(--panel-2);
+    text-align:center; transition:transform .15s ease, border-color .15s ease;
+  }
+  .group-card:hover{transform:translateY(-3px);}
+  .group-shape{width:42px; height:42px; margin:0 auto 14px; display:flex; align-items:center; justify-content:center;}
+  .shape-circle-outline{border-radius:50%; border:4px solid; background:#fff;}
+  .shape-tri{width:0; height:0; border-left:21px solid transparent; border-right:21px solid transparent; border-bottom:36px solid; margin-bottom:6px;}
+  .shape-circle-fill{border-radius:50%;}
+  .shape-square-fill{border-radius:8px;}
+  .shape-rect-outline{width:50px; height:32px; border-radius:6px; border:3px solid; background:none;}
+  .group-card .name{font-family:'Space Grotesk'; font-weight:700; font-size:13px; margin-bottom:4px;}
+  .group-card .count{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); line-height:1.5;}
+
+  .ab-note{
+    font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); line-height:1.7; margin-top:18px;
+    padding-top:16px; border-top:1px solid var(--line);
+  }
+
+  @media (max-width: 900px){
+    .pipeline{grid-template-columns:repeat(2,1fr); row-gap:28px;}
+    .pipeline::before{display:none;}
+    .stack-grid{grid-template-columns:repeat(2,1fr);}
+    .group-grid{grid-template-columns:repeat(2,1fr);}
+    .ab-hero .stats{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+<div class="ab-app">
+  <aside class="ab-rail">
+    <div class="mark">TV</div>
+    <nav>
+      <a href="{{ url_for('dashboard') }}">▣</a>
+      <a href="{{ url_for('detect') }}">⚡</a>
+      <a href="{{ url_for('video') }}">▶</a>
+      <a href="{{ url_for('webcam') }}">📷</a>
+      <a href="{{ url_for('history') }}">↻</a>
+      <a href="{{ url_for('metrics') }}">📈</a>
+      <a href="{{ url_for('classes') }}">☰</a>
+      <a class="active" href="{{ url_for('about') }}">ℹ</a>
+      <a href="{{ url_for('reports') }}">⬇</a>
+    </nav>
+  </aside>
+
+  <main class="ab-main">
+    <div class="ab-container">
+      <div class="ab-topbar">
+        <div>
+          <div class="ab-eyebrow"><span class="dot"></span> TrafficVision AI · Giới thiệu hệ thống</div>
+          <h1>Về hệ thống nhận diện biển báo</h1>
+        </div>
+        <a class="ab-btn" href="{{ url_for('dashboard') }}">← Về tổng quan</a>
+      </div>
+
+      <!-- ===== HERO ===== -->
+      <div class="ab-hero">
+        <div class="ab-hero-badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          THỊ GIÁC MÁY TÍNH · YOLOv8
+        </div>
+        <h2>Bài toán</h2>
+        <p>
+          Hệ thống giao thông Việt Nam sử dụng hơn 300 loại biển báo theo Quy chuẩn
+          QCVN 41:2019/BGTVT, được chia thành 5 nhóm: biển cấm, biển nguy hiểm, biển
+          hiệu lệnh, biển chỉ dẫn và biển phụ. Việc nhận diện thủ công dễ bỏ sót,
+          đặc biệt trong điều kiện lái xe tốc độ cao hoặc tầm nhìn hạn chế.
+          <b>TrafficVision AI</b> xây dựng một hệ thống thị giác máy tính, dùng mô hình
+          <b>YOLOv8n</b> để phát hiện và phân loại tự động biển báo giao thông
+          Việt Nam theo thời gian thực, từ ảnh tĩnh, video, hoặc webcam trực tiếp.
+        </p>
+        <div class="stats">
+          <div class="stat"><b>58</b><span>Loại biển hỗ trợ</span></div>
+          <div class="stat"><b>3.680</b><span>Ảnh trong dataset</span></div>
+          <div class="stat"><b>YOLOv8n</b><span>Kiến trúc mô hình</span></div>
+          <div class="stat"><b>~18ms</b><span>Thời gian suy luận / ảnh</span></div>
+        </div>
+      </div>
+
+      <!-- ===== SƠ ĐỒ KHỐI ===== -->
+      <div class="ab-panel">
+        <div class="ab-panel-head">
+          <div class="ab-panel-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          </div>
+          <div>
+            <h2>Sơ đồ khối hệ thống</h2>
+            <div class="sub">Luồng xử lý từ đầu vào đến kết quả hiển thị</div>
+          </div>
+        </div>
+
+        <div class="pipeline">
+          <div class="pipe-step">
+            <div class="icon" style="background:linear-gradient(135deg,var(--violet),var(--violet-dark));">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </div>
+            <div class="step-no">BƯỚC 01</div>
+            <div class="title">Đầu vào</div>
+            <div class="desc">Ảnh, video tải lên hoặc webcam trực tiếp</div>
+          </div>
+          <div class="pipe-step">
+            <div class="icon" style="background:linear-gradient(135deg,var(--cyan),#1B9FB0);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+            </div>
+            <div class="step-no">BƯỚC 02</div>
+            <div class="title">Tiền xử lý</div>
+            <div class="desc">Resize 640×640, chuẩn hoá ảnh đầu vào</div>
+          </div>
+          <div class="pipe-step">
+            <div class="icon" style="background:linear-gradient(135deg,var(--pink),#C22C5C);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/></svg>
+            </div>
+            <div class="step-no">BƯỚC 03</div>
+            <div class="title">YOLOv8n</div>
+            <div class="desc">Phát hiện vị trí + phân loại đồng thời</div>
+          </div>
+          <div class="pipe-step">
+            <div class="icon" style="background:linear-gradient(135deg,var(--amber),#B5780F);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 12.5 12.5 20.6a2 2 0 0 1-2.8 0l-8-8a2 2 0 0 1 0-2.8L9.7 1.7A2 2 0 0 1 11.1 1h6.5A3.4 3.4 0 0 1 21 4.4v6.5a2 2 0 0 1-.4 1.6z"/><circle cx="15.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+            </div>
+            <div class="step-no">BƯỚC 04</div>
+            <div class="title">Hậu xử lý</div>
+            <div class="desc">Lọc theo ngưỡng tin cậy, ánh xạ tên biển</div>
+          </div>
+          <div class="pipe-step">
+            <div class="icon" style="background:linear-gradient(135deg,var(--teal),#178F6E);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
+            </div>
+            <div class="step-no">BƯỚC 05</div>
+            <div class="title">Hiển thị</div>
+            <div class="desc">Vẽ khung, lưu lịch sử, thống kê dashboard</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== KIẾN TRÚC PHÂN TẦNG ===== -->
+      <div class="ab-panel">
+        <div class="ab-panel-head">
+          <div class="ab-panel-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div>
+            <h2>Kiến trúc phân tầng</h2>
+            <div class="sub">Tách biệt giao diện, ứng dụng và dữ liệu / mô hình</div>
+          </div>
+        </div>
+
+        <div class="arch-stack">
+          <div class="arch-tier t1">
+            <div class="tier-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
+            </div>
+            <div>
+              <div class="tier-name">Tầng giao diện (Frontend)</div>
+              <div class="tier-desc">HTML5 · CSS3 · JavaScript thuần · Canvas API · MediaDevices API</div>
+            </div>
+          </div>
+          <div class="arch-connector">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h12z"/></svg>
+          </div>
+          <div class="arch-tier t2">
+            <div class="tier-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            </div>
+            <div>
+              <div class="tier-name">Tầng ứng dụng (Backend — Flask / Python)</div>
+              <div class="tier-desc">Routing · Xác thực đăng nhập · Xử lý upload · Suy luận mô hình · API JSON · Xuất báo cáo</div>
+            </div>
+          </div>
+          <div class="arch-connector">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h12z"/></svg>
+          </div>
+          <div class="arch-tier t3">
+            <div class="tier-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
+            </div>
+            <div style="flex:1;">
+              <div class="tier-name">Tầng dữ liệu &amp; mô hình</div>
+              <div class="tier-desc">Lưu trữ, suy luận và các dịch vụ hỗ trợ phía sau</div>
+              <div class="t3-chips">
+                <span class="t3-chip">YOLOv8n (PyTorch)</span>
+                <span class="t3-chip">SQLite · detections.db</span>
+                <span class="t3-chip">Telegram Bot API</span>
+                <span class="t3-chip">Gmail SMTP</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TECH STACK ===== -->
+      <div class="ab-panel">
+        <div class="ab-panel-head">
+          <div class="ab-panel-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <div>
+            <h2>Công nghệ sử dụng</h2>
+            <div class="sub">Ngăn xếp công nghệ (tech stack) của hệ thống</div>
+          </div>
+        </div>
+        <div class="stack-grid">
+          <div class="stack-card">
+            <div class="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/></svg></div>
+            <div><div class="l">Model</div><div class="v">YOLOv8n (Ultralytics)</div></div>
+          </div>
+          <div class="stack-card">
+            <div class="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></div>
+            <div><div class="l">Backend</div><div class="v">Flask (Python)</div></div>
+          </div>
+          <div class="stack-card">
+            <div class="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path d="M21 15l-5-5L5 21"/></svg></div>
+            <div><div class="l">Xử lý ảnh</div><div class="v">OpenCV</div></div>
+          </div>
+          <div class="stack-card">
+            <div class="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg></div>
+            <div><div class="l">Phần cứng</div><div class="v">NVIDIA GeForce RTX 2050</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 5 NHÓM BIỂN BÁO ===== -->
+      <div class="ab-panel">
+        <div class="ab-panel-head">
+          <div class="ab-panel-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 22h20L12 2z"/></svg>
+          </div>
+          <div>
+            <h2>5 nhóm biển báo theo QCVN 41:2019</h2>
+            <div class="sub">Hệ hình dạng &amp; màu dùng xuyên suốt toàn bộ hệ thống</div>
+          </div>
+        </div>
+        <div class="group-grid">
+          <div class="group-card">
+            <div class="group-shape"><div class="shape-circle-outline" style="width:38px;height:38px; border-color:var(--pink);"></div></div>
+            <div class="name">Biển cấm</div>
+            <div class="count">Nền trắng, viền đỏ</div>
+          </div>
+          <div class="group-card">
+            <div class="group-shape"><div class="shape-tri" style="border-bottom-color:var(--amber);"></div></div>
+            <div class="name">Nguy hiểm</div>
+            <div class="count">Nền vàng, hình tam giác</div>
+          </div>
+          <div class="group-card">
+            <div class="group-shape"><div class="shape-circle-fill" style="width:38px;height:38px; background:var(--blue);"></div></div>
+            <div class="name">Hiệu lệnh</div>
+            <div class="count">Nền xanh lam, hình tròn</div>
+          </div>
+          <div class="group-card">
+            <div class="group-shape"><div class="shape-square-fill" style="width:38px;height:38px; background:var(--teal);"></div></div>
+            <div class="name">Chỉ dẫn</div>
+            <div class="count">Nền xanh lam, hình vuông</div>
+          </div>
+          <div class="group-card">
+            <div class="group-shape"><div class="shape-rect-outline" style="border-color:var(--slate); color:var(--slate);"></div></div>
+            <div class="name">Biển phụ</div>
+            <div class="count">Đi kèm biển chính</div>
+          </div>
+        </div>
+        <div class="ab-note">Nguồn dữ liệu huấn luyện: bộ ảnh biển báo giao thông Việt Nam công khai trên Roboflow Universe (3.680 ảnh, 58 lớp).</div>
+      </div>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

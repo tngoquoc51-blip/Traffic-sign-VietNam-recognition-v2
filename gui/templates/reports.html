@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xuất báo cáo — TrafficVision AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  :root{
+    --bg:#0B0C15; --panel:#14151F; --panel-2:#1B1D2A; --line:#242637;
+    --ink:#F2F3F7; --ink-mute:#8B8FA3;
+    --violet:#8B5CF6; --violet-dark:#6D4AEA;
+    --pink:#F2467A; --amber:#F6A623; --cyan:#28D9E8; --teal:#2DD4A6; --slate:#6B7280;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); font-family:'Inter',sans-serif; color:var(--ink); margin:0;}
+  .rp-app{display:grid; grid-template-columns:80px 1fr; min-height:100vh;}
+  .rp-rail{background:#0E0F19; border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:22px 0; gap:18px;}
+  .rp-rail .mark{width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg, var(--violet), var(--violet-dark)); display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk'; font-weight:800; color:#fff; font-size:13px;}
+  .rp-rail nav{display:flex; flex-direction:column; gap:14px; margin-top:10px;}
+  .rp-rail nav a{width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; color:#5C6178; font-size:16px; text-decoration:none;}
+  .rp-rail nav a.active{background:rgba(139,92,246,.15); color:var(--violet);}
+
+  .rp-main{padding:32px clamp(24px,4vw,56px);}
+  .rp-container{max-width:1200px; margin:0 auto;}
+
+  .rp-eyebrow{display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono'; font-size:11px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px;}
+  .rp-eyebrow .dot{width:6px; height:6px; border-radius:50%; background:var(--teal);}
+  .rp-topbar{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:24px; flex-wrap:wrap; gap:14px;}
+  .rp-topbar h1{font-family:'Space Grotesk'; font-weight:800; font-size:28px;}
+  .rp-btn{font-family:'Inter'; font-weight:600; font-size:13px; padding:10px 16px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;}
+
+  /* Bộ lọc */
+  .rp-filters{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px 20px; margin-bottom:20px; display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;}
+  .rp-field{display:flex; flex-direction:column; gap:6px;}
+  .rp-field label{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:.05em;}
+  .rp-field input, .rp-field select{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:9px;
+    padding:9px 12px; color:var(--ink); font-family:'Inter'; font-size:13px; min-width:160px;
+  }
+  .rp-field input:focus, .rp-field select:focus{outline:none; border-color:var(--violet);}
+
+  /* Thẻ xuất báo cáo */
+  .rp-export-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:22px;}
+  .rp-export-card{
+    border-radius:18px; padding:22px; border:1px solid var(--line);
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .rp-export-card.pdf{background:linear-gradient(135deg, rgba(242,70,122,.14), rgba(139,92,246,.08));}
+  .rp-export-card.excel{background:linear-gradient(135deg, rgba(45,212,166,.14), rgba(40,217,232,.08));}
+  .rp-export-card .top{display:flex; align-items:center; gap:12px;}
+  .rp-export-card .icon{width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:19px; color:#fff;}
+  .rp-export-card.pdf .icon{background:linear-gradient(135deg,var(--pink),#C22C5C);}
+  .rp-export-card.excel .icon{background:linear-gradient(135deg,var(--teal),#178F6E);}
+  .rp-export-card .name{font-family:'Space Grotesk'; font-weight:700; font-size:16px;}
+  .rp-export-card .desc{font-size:12.5px; color:var(--ink-mute); line-height:1.6;}
+  .rp-export-btn{
+    align-self:flex-start; font-family:'Inter'; font-weight:700; font-size:13px;
+    padding:11px 18px; border-radius:10px; border:none; color:#fff; cursor:pointer;
+  }
+  .rp-export-card.pdf .rp-export-btn{background:linear-gradient(135deg,var(--pink),#C22C5C);}
+  .rp-export-card.excel .rp-export-btn{background:linear-gradient(135deg,var(--teal),#178F6E);}
+  .rp-export-btn:disabled{opacity:.5; cursor:not-allowed;}
+  .rp-status{font-family:'IBM Plex Mono'; font-size:11px; color:var(--ink-mute);}
+
+  /* Xem trước bảng dữ liệu */
+  .rp-panel{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:20px;}
+  .rp-panel h2{font-family:'Space Grotesk'; font-weight:700; font-size:14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;}
+  .rp-panel h2 span{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); font-weight:400;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{text-align:left; font-family:'IBM Plex Mono'; font-weight:600; font-size:10px; color:var(--ink-mute); text-transform:uppercase; padding:0 0 10px; border-bottom:1px solid var(--line);}
+  td{padding:10px 8px 10px 0; border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  .rp-tag{display:inline-flex; font-family:'IBM Plex Mono'; font-size:10.5px; font-weight:600; padding:4px 9px; border-radius:6px;}
+  .rp-tag.red{background:rgba(242,70,122,.14); color:var(--pink);}
+  .rp-tag.amber{background:rgba(246,166,35,.16); color:var(--amber);}
+  .rp-tag.blue{background:rgba(74,155,250,.14); color:#4A9BFA;}
+  .rp-empty{padding:30px; text-align:center; color:var(--ink-mute); font-size:12.5px;}
+  .rp-note{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-mute); margin-top:14px; line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="rp-app">
+  <aside class="rp-rail">
+    <div class="mark">TV</div>
+    <nav>
+      <a href="{{ url_for('dashboard') }}">▣</a>
+      <a href="{{ url_for('detect') }}">⚡</a>
+      <a href="{{ url_for('video') }}">▶</a>
+      <a href="{{ url_for('webcam') }}">📷</a>
+      <a href="{{ url_for('history') }}">↻</a>
+      <a href="{{ url_for('metrics') }}">📈</a>
+      <a href="{{ url_for('classes') }}">☰</a>
+      <a href="{{ url_for('about') }}">ℹ</a>
+      <a class="active" href="{{ url_for('reports') }}">⬇</a>
+    </nav>
+  </aside>
+
+  <main class="rp-main">
+    <div class="rp-container">
+      <div class="rp-topbar">
+        <div>
+          <div class="rp-eyebrow"><span class="dot"></span> TrafficVision AI · Xuất báo cáo</div>
+          <h1>Xuất báo cáo từ lịch sử nhận diện</h1>
+        </div>
+        <a class="rp-btn" href="{{ url_for('history') }}">← Về lịch sử</a>
+      </div>
+
+      <div class="rp-filters">
+        <div class="rp-field">
+          <label>Từ ngày</label>
+          <input type="date" id="rpFrom">
+        </div>
+        <div class="rp-field">
+          <label>Đến ngày</label>
+          <input type="date" id="rpTo">
+        </div>
+        <div class="rp-field">
+          <label>Nhóm biển</label>
+          <select id="rpGroup">
+            <option value="all">Tất cả</option>
+            <option value="P">Biển cấm</option>
+            <option value="W">Biển nguy hiểm</option>
+            <option value="R">Biển hiệu lệnh</option>
+            <option value="S">Biển chỉ dẫn</option>
+            <option value="DP">Biển phụ</option>
+          </select>
+        </div>
+        <div class="rp-field">
+          <label>Ngưỡng tin cậy tối thiểu</label>
+          <select id="rpConf">
+            <option value="0">Tất cả</option>
+            <option value="0.5">≥ 50%</option>
+            <option value="0.7">≥ 70%</option>
+            <option value="0.9">≥ 90%</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="rp-export-grid">
+        <div class="rp-export-card pdf">
+          <div class="top">
+            <div class="icon">📄</div>
+            <div>
+              <div class="name">Xuất PDF</div>
+            </div>
+          </div>
+          <div class="desc">Báo cáo tổng hợp dạng văn bản — phù hợp đính kèm phụ lục báo cáo đồ án hoặc in ra trình bày. Gồm bảng thống kê + biểu đồ phân bố nhóm biển.</div>
+          <button class="rp-export-btn" id="rpExportPdf">⬇ Tải báo cáo PDF</button>
+          <div class="rp-status" id="rpPdfStatus"></div>
+        </div>
+
+        <div class="rp-export-card excel">
+          <div class="top">
+            <div class="icon">📊</div>
+            <div>
+              <div class="name">Xuất Excel</div>
+            </div>
+          </div>
+          <div class="desc">Toàn bộ bản ghi nhận diện dạng bảng (.xlsx) — phù hợp để phân tích thêm bằng Excel/Python, hoặc làm phụ lục dữ liệu thô.</div>
+          <button class="rp-export-btn" id="rpExportExcel">⬇ Tải bảng Excel</button>
+          <div class="rp-status" id="rpExcelStatus"></div>
+        </div>
+      </div>
+
+      <div class="rp-panel">
+        <h2>Xem trước dữ liệu sẽ xuất <span id="rpPreviewCount"></span></h2>
+        <table>
+          <tr><th>Biển báo</th><th>Nhóm</th><th>Độ tin cậy</th><th>Thời gian</th></tr>
+          <tbody id="rpPreviewBody">
+            <tr><td colspan="4" class="rp-empty">Đang tải dữ liệu xem trước…</td></tr>
+          </tbody>
+        </table>
+        <div class="rp-note">
+          Dữ liệu xem trước lấy 10 bản ghi gần nhất khớp bộ lọc. File xuất ra sẽ gồm TOÀN BỘ bản ghi khớp bộ lọc, không giới hạn 10 dòng.
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  // Khớp đúng GROUP_MAP thật trong web_app.py: S = Chỉ dẫn, DP = Phụ
+  const GROUP_TAG = { "P": "red", "W": "amber", "R": "blue", "S": "blue", "DP": "amber" };
+  const GROUP_NAME = { "P": "Biển cấm", "W": "Biển nguy hiểm", "R": "Biển hiệu lệnh", "S": "Biển chỉ dẫn", "DP": "Biển phụ" };
+
+  function buildQuery() {
+    const params = new URLSearchParams();
+    const from = document.getElementById("rpFrom").value;
+    const to = document.getElementById("rpTo").value;
+    const group = document.getElementById("rpGroup").value;
+    const conf = document.getElementById("rpConf").value;
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    if (group && group !== "all") params.set("group", group);
+    if (conf && conf !== "0") params.set("min_conf", conf);
+    return params.toString();
+  }
+
+  async function loadPreview() {
+    const body = document.getElementById("rpPreviewBody");
+    const countEl = document.getElementById("rpPreviewCount");
+    body.innerHTML = `<tr><td colspan="4" class="rp-empty">Đang tải dữ liệu xem trước…</td></tr>`;
+    try {
+      const res = await fetch(`/api/history_preview?${buildQuery()}&limit=10`);
+      const data = await res.json();
+      const rows = data.records || [];
+      countEl.textContent = `${data.total ?? rows.length} bản ghi khớp bộ lọc`;
+
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="4" class="rp-empty">Không có bản ghi nào khớp bộ lọc.</td></tr>`;
+        return;
+      }
+      body.innerHTML = rows.map(r => {
+        const prefix = (r.code || "").split(".")[0];
+        const tagClass = GROUP_TAG[prefix] || "amber";
+        const groupName = GROUP_NAME[prefix] || "Không rõ";
+        return `<tr>
+          <td>${r.code}</td>
+          <td><span class="rp-tag ${tagClass}">${groupName}</span></td>
+          <td>${(r.confidence * 100).toFixed(1)}%</td>
+          <td style="font-family:'IBM Plex Mono'; font-size:11px; color:var(--ink-mute);">${r.timestamp}</td>
+        </tr>`;
+      }).join("");
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="4" class="rp-empty">Chưa kết nối được API /api/history_preview — xem export_routes_snippet.py để gắn route này.</td></tr>`;
+    }
+  }
+
+  async function triggerExport(kind) {
+    const btn = document.getElementById(kind === "pdf" ? "rpExportPdf" : "rpExportExcel");
+    const status = document.getElementById(kind === "pdf" ? "rpPdfStatus" : "rpExcelStatus");
+    btn.disabled = true;
+    status.textContent = "Đang tạo file…";
+    try {
+      const url = `/export/${kind}?${buildQuery()}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Server trả về lỗi ${res.status}`);
+      const blob = await res.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = kind === "pdf" ? "bao_cao_nhan_dien.pdf" : "lich_su_nhan_dien.xlsx";
+      link.click();
+      status.textContent = "Đã tải xong.";
+    } catch (e) {
+      status.textContent = "Lỗi: " + e.message + " — kiểm tra route /export/" + kind + " đã gắn vào app.py chưa.";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("rpExportPdf").addEventListener("click", () => triggerExport("pdf"));
+  document.getElementById("rpExportExcel").addEventListener("click", () => triggerExport("excel"));
+  ["rpFrom", "rpTo", "rpGroup", "rpConf"].forEach(id =>
+    document.getElementById(id).addEventListener("change", loadPreview)
+  );
+
+  loadPreview();
+</script>
+</body>
+</html>

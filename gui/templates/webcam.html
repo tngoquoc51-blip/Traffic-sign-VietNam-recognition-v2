@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Giám sát trực tiếp — TrafficVision AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">TV</div>
+        <a href="{{ url_for('dashboard') }}" title="Tổng quan">&#9635;</a>
+        <a href="{{ url_for('detect') }}" title="Nhận diện ảnh">&#9889;</a>
+        <a href="{{ url_for('video') }}" title="Nhận diện video">&#9654;</a>
+        <a href="{{ url_for('webcam') }}" class="active" title="Giám sát trực tiếp">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4zM12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+        </a>
+                <a href="{{ url_for('history') }}" title="Lịch sử">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3z"/>
+                <path d="M12 8v5l4.28 2.54.72-1.21-3.5-2.08V8z"/>
+            </svg>
+        </a>
+        <a href="{{ url_for('metrics') }}" title="Đánh giá model">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M5 21V10h3v11H5zm5.5 0V3h3v18h-3zM16 21v-7h3v7h-3z"/></svg>
+        </a>
+        <a href="{{ url_for('classes') }}" title="Danh mục biển báo">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/></svg>
+        </a>
+        <a href="{{ url_for('about') }}" title="Giới thiệu hệ thống">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+        </a>
+        <a href="{{ url_for('reports') }}" title="Xuất báo cáo">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </a>
+        <div class="sidebar-spacer"></div>
+        <a href="{{ url_for('logout') }}" class="sidebar-logout" title="Đăng xuất">&#9211;</a>
+    </div>>
+
+    <div class="main" style="--content-max:1400px;">
+        <div class="header-row">
+            <div>
+                <div class="eyebrow">
+                    TrafficVision AI &middot; Giám sát camera trực tiếp &middot;
+                    <span class="dot" id="statusDot">&#9679;</span>
+                    <span id="statusText">Chưa bật camera</span>
+                </div>
+                <h1>Giám sát &amp; phát hiện biển báo trực tiếp</h1>
+            </div>
+            <div class="btn-row">
+                <a href="{{ url_for('dashboard') }}" class="btn">&larr; Về tổng quan</a>
+            </div>
+        </div>
+
+        <div id="flashBox"></div>
+
+        <!-- Khung camera chính -->
+        <div class="cam-stage" id="camStage">
+            <div class="video-hero-bar">
+                <span class="live-badge" id="scanBadge"><span class="pulse-dot"></span> Camera chưa hoạt động</span>
+                <span id="heroStatusText" style="font-size:12px; color:#c7c9d1;">Khung hình: 0 &middot; 0s</span>
+            </div>
+
+            <div class="cam-frame">
+                <video id="webcamVideo" autoplay muted playsinline></video>
+                <canvas id="overlayCanvas"></canvas>
+                <div class="cam-corner cam-corner-tl"></div>
+                <div class="cam-corner cam-corner-tr"></div>
+                <div class="cam-corner cam-corner-bl"></div>
+                <div class="cam-corner cam-corner-br"></div>
+                <div class="capture-flash" id="captureFlash"></div>
+                <div class="cam-placeholder" id="camPlaceholder">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+                    <div>Bấm "Bật camera" để bắt đầu</div>
+                </div>
+            </div>
+
+            <div class="cam-controls">
+                <button type="button" class="btn btn-primary" id="initBtn">&#128247; Bật camera</button>
+                <button type="button" class="btn" id="startBtn" disabled>&#9654; Bắt đầu giám sát</button>
+                <button type="button" class="btn" id="stopBtn" disabled>&#9632; Dừng &amp; lưu kết quả</button>
+            </div>
+        </div>
+
+        <div class="mini-stat-grid">
+            <div class="mini-stat">
+                <div class="mini-stat-label">Loại biển phát hiện</div>
+                <div class="mini-stat-value" id="statCount">0</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-label">Khung hình đã quét</div>
+                <div class="mini-stat-value" id="statFrames">0</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-label">Thời gian giám sát</div>
+                <div class="mini-stat-value" id="statElapsed">0s</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-label">Trạng thái</div>
+                <div class="mini-stat-value" id="statStatus" style="font-size:15px;">Chưa bắt đầu</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="section-title">Phân loại theo nhóm (cập nhật trực tiếp)</div>
+                <div id="groupBreakdown">
+                    <div class="empty-state">Đang chờ phát hiện biển báo đầu tiên...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Bằng chứng vừa chụp gần nhất</div>
+                <div id="latestCapture">
+                    <div class="empty-state">Chưa chụp được biển báo nào.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+            <div class="section-title">Thư viện bằng chứng đã chụp — kèm ảnh thực tế &amp; độ tin cậy</div>
+            <div class="sign-gallery" id="signGallery">
+                <div class="empty-state">Chưa phát hiện biển báo nào.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tự động chuyển sang localhost nếu đang mở bằng IP LAN,
+        // vì trình duyệt chỉ cho phép dùng camera qua localhost/127.0.0.1/https
+        if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            location.href = location.protocol + '//localhost:' + location.port + location.pathname + location.search;
+        }
+
+        const video = document.getElementById('webcamVideo');
+        const overlay = document.getElementById('overlayCanvas');
+        const overlayCtx = overlay.getContext('2d');
+        const camPlaceholder = document.getElementById('camPlaceholder');
+        const captureCanvas = document.createElement('canvas');
+        const captureCtx = captureCanvas.getContext('2d');
+
+        const initBtn = document.getElementById('initBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const flashBox = document.getElementById('flashBox');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const scanBadge = document.getElementById('scanBadge');
+        const heroStatusText = document.getElementById('heroStatusText');
+
+        let sessionId = null;
+        let intervalId = null;
+        let lastSignsSignature = '';
+        let cameraReady = false;
+
+        function showFlash(msg) {
+            flashBox.innerHTML = '<div class="flash">' + msg + '</div>';
+            setTimeout(() => { flashBox.innerHTML = ''; }, 4000);
+        }
+
+        async function initCamera() {
+            initBtn.disabled = true;
+            initBtn.textContent = 'Đang mở camera...';
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                    },
+                    audio: false,
+                });
+                video.srcObject = stream;
+                await video.play();
+
+                overlay.width = video.videoWidth;
+                overlay.height = video.videoHeight;
+                captureCanvas.width = video.videoWidth;
+                captureCanvas.height = video.videoHeight;
+
+                camPlaceholder.style.display = 'none';
+                cameraReady = true;
+                startBtn.disabled = false;
+                initBtn.textContent = '&#128247; Camera đã bật';
+                initBtn.innerHTML = '&#9989; Camera đã bật';
+                statusDot.style.color = 'var(--success)';
+                statusText.textContent = 'Camera sẵn sàng — chưa giám sát';
+            } catch (err) {
+                showFlash('Không truy cập được camera: ' + err.message + '. Hãy cho phép trình duyệt dùng camera.');
+                initBtn.disabled = false;
+                initBtn.innerHTML = '&#128247; Bật camera';
+            }
+        }
+
+        async function startScanning() {
+            if (!cameraReady) return;
+            const res = await fetch('/webcam/start', { method: 'POST' });
+            const data = await res.json();
+            sessionId = data.session_id;
+            lastSignsSignature = '';
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            scanBadge.classList.add('scanning');
+            scanBadge.innerHTML = '<span class="pulse-dot"></span> Đang giám sát trực tiếp';
+            statusDot.style.color = 'var(--danger)';
+            statusText.textContent = 'Đang giám sát trực tiếp...';
+            document.getElementById('statStatus').textContent = 'Đang giám sát...';
+
+            intervalId = setInterval(captureAndSend, 600);
+        }
+
+        function captureAndSend() {
+            if (!sessionId || video.readyState < 2) return;
+            captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            captureCanvas.toBlob((blob) => {
+                if (!blob) return;
+                const formData = new FormData();
+                formData.append('frame', blob, 'frame.jpg');
+                fetch('/webcam/detect/' + sessionId, { method: 'POST', body: formData })
+                    .then((r) => r.json())
+                    .then(handleDetectResponse)
+                    .catch(() => {});
+            }, 'image/jpeg', 0.9);
+        }
+
+        function handleDetectResponse(data) {
+            if (data.error) return;
+
+            document.getElementById('statFrames').textContent = data.frame_count;
+            document.getElementById('statElapsed').textContent = data.elapsed + 's';
+            document.getElementById('statCount').textContent = data.signs.length;
+            heroStatusText.textContent = 'Khung hình: ' + data.frame_count + ' \u00b7 ' + data.elapsed + 's';
+
+            drawBoxes(data.boxes);
+
+            const signature = JSON.stringify(data.signs.map((s) => s.class_name + ':' + s.confidence));
+            if (signature !== lastSignsSignature) {
+                lastSignsSignature = signature;
+                renderGroups(data.group_summary, data.signs.length);
+                renderGallery(data.signs);
+                renderLatestCapture(data.signs);
+                flashCapture();
+            }
+        }
+
+        function drawBoxes(boxes) {
+            overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+            boxes.forEach((b) => {
+                const [x1, y1, x2, y2] = b.box;
+                overlayCtx.strokeStyle = '#ff5252';
+                overlayCtx.lineWidth = Math.max(2, overlay.width / 300);
+                overlayCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+                const label = b.class_name + '  ' + b.confidence + '%';
+                overlayCtx.font = 'bold ' + Math.max(14, overlay.width / 45) + 'px Segoe UI';
+                const textWidth = overlayCtx.measureText(label).width;
+                const labelH = Math.max(20, overlay.width / 32);
+
+                overlayCtx.fillStyle = '#ff5252';
+                overlayCtx.fillRect(x1, Math.max(0, y1 - labelH), textWidth + 12, labelH);
+                overlayCtx.fillStyle = '#fff';
+                overlayCtx.fillText(label, x1 + 6, Math.max(labelH - 6, y1 - 6));
+            });
+        }
+
+        function flashCapture() {
+            const flash = document.getElementById('captureFlash');
+            flash.classList.add('flash-active');
+            setTimeout(() => flash.classList.remove('flash-active'), 180);
+        }
+
+        function stopScanning() {
+            if (intervalId) clearInterval(intervalId);
+            overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            scanBadge.classList.remove('scanning');
+            scanBadge.innerHTML = 'Đã dừng giám sát';
+            statusDot.style.color = 'var(--text-muted)';
+            statusText.textContent = 'Đã dừng giám sát';
+            document.getElementById('statStatus').textContent = 'Đã dừng';
+
+            if (sessionId) {
+                const sid = sessionId;
+                sessionId = null;
+                fetch('/webcam/stop/' + sid, { method: 'POST' })
+                    .then((r) => r.json())
+                    .then((data) => {
+                        showFlash('Đã dừng giám sát. Đã lưu ' + data.saved + ' biển báo vào lịch sử nhận diện.');
+                    });
+            }
+        }
+
+        const groupColors = {
+            'Biển cấm': ['var(--danger)', 'icon-danger', 'C'],
+            'Biển nguy hiểm': ['var(--warning)', 'icon-warning', 'N'],
+            'Biển hiệu lệnh': ['var(--info)', 'icon-info', 'H'],
+            'Biển chỉ dẫn': ['var(--success)', 'icon-success', 'D'],
+            'Biển phụ': ['var(--neutral)', 'icon-neutral', 'P'],
+        };
+
+        function renderGroups(groupSummary, total) {
+            const box = document.getElementById('groupBreakdown');
+            const keys = Object.keys(groupSummary || {});
+            if (keys.length === 0) {
+                box.innerHTML = '<div class="empty-state">Đang chờ phát hiện biển báo đầu tiên...</div>';
+                return;
+            }
+            let html = '';
+            keys.forEach((label) => {
+                const count = groupSummary[label];
+                const [color, iconClass, letter] = groupColors[label] || ['var(--neutral)', 'icon-neutral', '?'];
+                const pct = total ? (count / total * 100) : 0;
+                html += `
+                    <div class="group-row-v2">
+                        <div class="group-icon ${iconClass}">${letter}</div>
+                        <div class="group-info">
+                            <div class="group-title">${label}</div>
+                            <div class="group-track"><div class="group-fill" style="width:${pct}%; background:${color};"></div></div>
+                        </div>
+                        <div class="group-num">${count}</div>
+                    </div>`;
+            });
+            box.innerHTML = html;
+        }
+
+        function renderLatestCapture(signs) {
+            const box = document.getElementById('latestCapture');
+            if (!signs || signs.length === 0) {
+                box.innerHTML = '<div class="empty-state">Chưa chụp được biển báo nào.</div>';
+                return;
+            }
+            const latest = signs[signs.length - 1];
+            const imgHtml = latest.thumbnail_url
+                ? `<img src="${latest.thumbnail_url}" class="result-image" style="max-height:220px; object-fit:contain; background:var(--bg);">`
+                : `<div class="sign-card-thumb-empty">&#128247;</div>`;
+            box.innerHTML = `
+                ${imgHtml}
+                <div style="margin-top:12px; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <div style="font-weight:800; font-size:16px;">${latest.class_name}</div>
+                        <span class="badge badge-${latest.badge}">${latest.group_label}</span>
+                    </div>
+                    <div style="font-size:22px; font-weight:800;">${latest.confidence}%</div>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:8px; line-height:1.5;">${latest.meaning || latest.group_description || ''}</div>`;
+        }
+
+        function renderGallery(signs) {
+            const box = document.getElementById('signGallery');
+            if (!signs || signs.length === 0) {
+                box.innerHTML = '<div class="empty-state">Chưa phát hiện biển báo nào.</div>';
+                return;
+            }
+            let html = '';
+            signs.forEach((s) => {
+                const imgHtml = s.thumbnail_url
+                    ? `<img src="${s.thumbnail_url}" class="sign-card-thumb" loading="lazy">`
+                    : `<div class="sign-card-thumb-empty">&#128247;</div>`;
+                html += `
+                    <div class="sign-card">
+                        ${imgHtml}
+                        <div class="sign-card-body">
+                            <div class="sign-card-name">${s.class_name}</div>
+                            <span class="badge badge-${s.badge}" style="margin-bottom:8px; display:inline-block;">${s.group_label}</span>
+                            <div class="sign-card-conf">
+                                <div class="sign-card-conf-track"><div class="sign-card-conf-fill" style="width:${s.confidence}%;"></div></div>
+                                <span>${s.confidence}%</span>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            box.innerHTML = html;
+        }
+
+                initBtn.addEventListener('click', initCamera);
+        startBtn.addEventListener('click', startScanning);
+        stopBtn.addEventListener('click', stopScanning);
+    </script>
+    <script src="{{ url_for('static', filename='theme-toggle.js') }}"></script>
+    {% include "chatbot_widget.html" %}
+</body>
+</html>

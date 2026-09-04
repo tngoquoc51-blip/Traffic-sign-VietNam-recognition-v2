@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Nhận diện video trực tiếp — TrafficVision AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* ==================================================================
+           Trang Video — bố cục "theater + live feed" (scoped riêng cho trang này)
+           Không phụ thuộc CSS toàn cục để tránh xung đột/khoảng trắng lạ.
+           ================================================================== */
+        .vpage { max-width: 1600px; }
+
+        .vpage .header-row { margin-bottom: 20px; }
+
+        /* ---- Khung tải video ---- */
+        .v-upload-card { margin-bottom: 18px; }
+
+        .v-upload-collapsed {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--card, #171a21);
+            border: 1px solid var(--border, #262b36);
+            border-radius: var(--radius, 10px);
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        /* ---- Bố cục chính: theater (trái) + feed (phải) ---- */
+        .v-stage {
+            display: none;
+            gap: 18px;
+            align-items: flex-start;
+        }
+        @media (min-width: 1080px) {
+            .v-stage { grid-template-columns: 1fr 380px; display: grid; }
+        }
+        .v-stage.is-active { display: grid; }
+        @media (max-width: 1079px) {
+            .v-stage.is-active { display: flex; flex-direction: column; }
+        }
+
+        /* ---- Theater: video co theo đúng tỉ lệ thật, không viền đen thừa ---- */
+        .v-theater {
+            background: #000;
+            border-radius: var(--radius, 10px);
+            overflow: hidden;
+            border: 1px solid var(--border, #262b36);
+        }
+        .v-theater-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.04);
+        }
+        .v-live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+        .v-live-pill .dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--danger, #e5544f);
+            animation: v-pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes v-pulse { 0%,100%{opacity:1; transform:scale(1);} 50%{opacity:.4; transform:scale(.7);} }
+        .v-meta { font-size: 11.5px; color: #b7bcc9; }
+
+        /* Vùng chứa video: căn giữa, co theo nội dung thật (không ép full-width) */
+        .v-frame-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            min-height: 220px;
+            position: relative;
+        }
+        .v-frame-wrap img {
+            display: block;
+            max-width: 100%;
+            max-height: min(72vh, 760px);
+            width: auto;
+            height: auto;
+        }
+        .v-frame-empty {
+            color: #666d7d;
+            font-size: 13px;
+            padding: 80px 0;
+        }
+
+        /* Thanh điều khiển overlay kiểu trình phát video hiện đại */
+        .v-controls-overlay {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
+            padding: 28px 14px 10px;
+        }
+        .v-seek-track {
+            position: relative;
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.25);
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .v-seek-fill {
+            position: absolute; left: 0; top: 0; height: 100%; width: 0%;
+            background: var(--accent, #7c6fea);
+            border-radius: 4px;
+        }
+        .v-seek-thumb {
+            position: absolute; top: 50%; left: 0%;
+            width: 11px; height: 11px;
+            background: var(--accent, #7c6fea);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 3px rgba(124,111,234,0.25);
+        }
+        .v-controls-row { display: flex; align-items: center; gap: 6px; }
+        .v-ctrl-btn {
+            background: none; border: none; color: #fff; cursor: pointer;
+            width: 32px; height: 32px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center; font-size: 17px;
+        }
+        .v-ctrl-btn:hover { background: rgba(255,255,255,0.14); }
+        .v-time { color: #d8dae2; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .v-spacer { flex: 1; }
+
+        /* ---- Mini-stat dưới theater (chỉ hiện trên mobile khi feed xuống dưới) ---- */
+        .v-stat-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .v-stat {
+            background: var(--card, #171a21);
+            border: 1px solid var(--border, #262b36);
+            border-radius: var(--radius, 10px);
+            padding: 12px 14px;
+        }
+        .v-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted, #8b93a7); font-weight: 700; margin-bottom: 6px; }
+        .v-stat-value { font-size: 19px; font-weight: 800; }
+
+        /* ---- Sidebar phải: nhật ký phát hiện trực tiếp (feed) ---- */
+        .v-feed-panel {
+            background: var(--card, #171a21);
+            border: 1px solid var(--border, #262b36);
+            border-radius: var(--radius, 10px);
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 40px);
+        }
+        @media (min-width: 1080px) { .v-feed-panel { position: sticky; top: 20px; } }
+
+        .v-feed-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border, #262b36);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .v-feed-title { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 800; }
+        .v-feed-count {
+            font-size: 11px; font-weight: 800; background: var(--bg, #0f1115);
+            border: 1px solid var(--border, #262b36); border-radius: 20px; padding: 2px 9px;
+            color: var(--text-muted, #8b93a7);
+        }
+
+        .v-feed-latest {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border, #262b36);
+        }
+        .v-feed-latest-empty { color: var(--text-muted, #8b93a7); font-size: 12.5px; text-align: center; padding: 18px 0; }
+        .v-feed-latest img {
+            width: 100%; max-height: 150px; object-fit: contain;
+            background: var(--bg, #0f1115); border-radius: 8px; margin-bottom: 10px;
+        }
+        .v-feed-latest-code { font-size: 10px; color: var(--text-muted, #8b93a7); font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+        .v-feed-latest-name { font-weight: 800; font-size: 15px; margin: 2px 0 8px; }
+        .v-feed-latest-meaning { font-size: 12px; line-height: 1.55; color: var(--text, #e8e9ee); }
+
+        .v-feed-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column-reverse; /* mới nhất luôn ở trên vì ta prepend */
+            gap: 6px;
+        }
+        .v-feed-empty { color: var(--text-muted, #8b93a7); font-size: 12.5px; text-align: center; padding: 30px 10px; }
+        .v-feed-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 8px;
+            border-radius: 8px;
+        }
+        .v-feed-item.is-new { animation: v-feed-in .5s ease; }
+        @keyframes v-feed-in {
+            from { background: rgba(124,111,234,0.18); transform: translateX(4px); }
+            to { background: transparent; transform: translateX(0); }
+        }
+        .v-feed-thumb {
+            width: 38px; height: 38px; border-radius: 6px; object-fit: cover;
+            background: var(--bg, #0f1115); flex-shrink: 0;
+        }
+        .v-feed-thumb-empty {
+            width: 38px; height: 38px; border-radius: 6px; background: var(--bg, #0f1115);
+            display: flex; align-items: center; justify-content: center; color: var(--text-muted, #8b93a7);
+            font-size: 15px; flex-shrink: 0;
+        }
+        .v-feed-item-body { flex: 1; min-width: 0; }
+        .v-feed-item-name { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .v-feed-item-sub { font-size: 10.5px; color: var(--text-muted, #8b93a7); }
+        .v-feed-item-conf { font-size: 12px; font-weight: 800; flex-shrink: 0; }
+
+        .v-group-bars { padding: 12px 16px; border-top: 1px solid var(--border, #262b36); }
+        .v-group-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; margin-bottom: 8px; }
+        .v-group-row:last-child { margin-bottom: 0; }
+        .v-group-name { width: 78px; flex-shrink: 0; color: var(--text-muted, #8b93a7); }
+        .v-group-track { flex: 1; height: 6px; background: var(--bg, #0f1115); border-radius: 4px; overflow: hidden; }
+        .v-group-fill { height: 100%; border-radius: 4px; }
+        .v-group-num { width: 20px; text-align: right; font-weight: 800; }
+
+        /* ---- Thư viện đầy đủ (bên dưới, full width) ---- */
+        .v-library { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">TV</div>
+        <a href="{{ url_for('dashboard') }}" title="Tổng quan">&#9635;</a>
+        <a href="{{ url_for('detect') }}" title="Nhận diện ảnh">&#9889;</a>
+        <a href="{{ url_for('video') }}" class="active" title="Nhận diện video">&#9654;</a>
+        <a href="{{ url_for('webcam') }}" title="Giám sát trực tiếp">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4zM12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+        </a>
+        <a href="{{ url_for('history') }}" title="Lịch sử">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3z"/>
+                <path d="M12 8v5l4.28 2.54.72-1.21-3.5-2.08V8z"/>
+            </svg>
+        </a>
+        <a href="{{ url_for('metrics') }}" title="Đánh giá model">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M5 21V10h3v11H5zm5.5 0V3h3v18h-3zM16 21v-7h3v7h-3z"/></svg>
+        </a>
+        <div class="sidebar-spacer"></div>
+        <a href="{{ url_for('logout') }}" class="sidebar-logout" title="Đăng xuất">&#9211;</a>
+    </div>
+
+    <div class="main vpage" style="--content-max:1600px;">
+        <div class="header-row">
+            <div>
+                <div class="eyebrow">
+                    TrafficVision AI &middot; Nhận diện trực tiếp &middot;
+                    <span class="dot" id="liveDot">&#9679;</span>
+                    <span id="liveStatusText">Chưa có video</span>
+                </div>
+                <h1>Nhận diện biển báo từ video (trực tiếp)</h1>
+            </div>
+            <div class="btn-row">
+                <a href="{{ url_for('dashboard') }}" class="btn">&larr; Về tổng quan</a>
+            </div>
+        </div>
+
+        <div id="flashBox"></div>
+
+        <!-- Khung tải video -->
+        <div class="card v-upload-card" id="uploadCard">
+            <div class="section-title">Tải video lên</div>
+            <label class="dropzone" id="dropzone" for="videoInput">
+                <div class="dropzone-icon">&#9654;</div>
+                <div class="dropzone-title">Kéo thả video vào đây, hoặc bấm để chọn file</div>
+                <div class="dropzone-sub">Hỗ trợ .mp4 &middot; video sẽ được quét và phân tích ngay khi phát &middot; video dọc hoặc ngang đều hiển thị đúng tỉ lệ</div>
+                <input type="file" id="videoInput" accept="video/mp4,video/*">
+                <div class="file-chip" id="fileChip">&#128190; <span id="fileName"></span></div>
+                <div style="margin-top:18px;">
+                    <button type="button" class="btn btn-primary" id="startBtn" onclick="event.stopPropagation(); startDetection();">Bắt đầu quét trực tiếp</button>
+                </div>
+            </label>
+        </div>
+
+        <div class="v-upload-collapsed" id="uploadCollapsed">
+            <span>&#128190; <strong id="collapsedFileName"></strong> đang được quét</span>
+            <button type="button" class="btn" id="newVideoBtn" onclick="resetUpload();">Chọn video khác</button>
+        </div>
+
+        <!-- Bố cục chính: Theater (trái) + Nhật ký trực tiếp (phải) -->
+        <div class="v-stage" id="vStage">
+
+            <div>
+                <div class="v-theater" id="videoHero">
+                    <div class="v-theater-topbar">
+                        <span class="v-live-pill"><span class="dot"></span> Đang quét trực tiếp</span>
+                        <span class="v-meta" id="heroStatusText">Khung hình: 0 &middot; 0s</span>
+                    </div>
+
+                    <div class="v-frame-wrap">
+                        <img id="liveStream" style="display:none;" />
+                        <div class="v-frame-empty" id="frameEmpty">Đang kết nối luồng video...</div>
+                        <audio id="audioSync" preload="auto"></audio>
+
+                        <div class="v-controls-overlay">
+                            <div class="v-seek-track" id="seekbarTrack">
+                                <div class="v-seek-fill" id="seekbarFill"></div>
+                                <div class="v-seek-thumb" id="seekbarThumb"></div>
+                            </div>
+                            <div class="v-controls-row">
+                                <button type="button" class="v-ctrl-btn" id="pauseBtn" title="Phát / Tạm dừng">&#9208;</button>
+                                <button type="button" class="v-ctrl-btn" id="muteBtn" title="Bật / Tắt âm thanh">&#128266;</button>
+                                <span class="v-time" id="timeDisplay">0:00 / 0:00</span>
+                                <span class="v-spacer"></span>
+                                <button type="button" class="v-ctrl-btn" id="rescanBtn" title="Quét lại từ đầu">&#8635;</button>
+                                <button type="button" class="v-ctrl-btn" id="fullscreenBtn" title="Toàn màn hình">&#9974;</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="v-stat-strip">
+                    <div class="v-stat">
+                        <div class="v-stat-label">Loại biển</div>
+                        <div class="v-stat-value" id="statCount">0</div>
+                    </div>
+                    <div class="v-stat">
+                        <div class="v-stat-label">Khung hình đã quét</div>
+                        <div class="v-stat-value" id="statFrames">0</div>
+                    </div>
+                    <div class="v-stat">
+                        <div class="v-stat-label">Thời gian xử lý</div>
+                        <div class="v-stat-value" id="statElapsed">0s</div>
+                    </div>
+                    <div class="v-stat">
+                        <div class="v-stat-label">Trạng thái</div>
+                        <div class="v-stat-value" id="statStatus" style="font-size:13px;">Đang quét...</div>
+                    </div>
+                </div>
+
+                <!-- Thư viện đầy đủ theo cột nhóm — vẫn giữ để xem lại chi tiết -->
+                <div class="card v-library">
+                    <div class="section-title">Thư viện biển báo đã phát hiện — phân loại theo nhóm &amp; ý nghĩa chi tiết</div>
+                    <div class="sign-columns" id="signColumns">
+                        <div class="empty-state">Chưa phát hiện biển báo nào.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar: nhật ký phát hiện trực tiếp -->
+            <div class="v-feed-panel">
+                <div class="v-feed-header">
+                    <span class="v-feed-title">Phát hiện gần đây nhất</span>
+                    <span class="v-feed-count" id="feedCount">0</span>
+                </div>
+
+                <div class="v-feed-latest" id="latestCapture">
+                    <div class="v-feed-latest-empty">Chưa chụp được biển báo nào.</div>
+                </div>
+
+                <div class="v-group-bars" id="groupBreakdown" style="display:none;"></div>
+
+                <div class="v-feed-list" id="feedList">
+                    <div class="v-feed-empty">Nhật ký sẽ hiện ở đây ngay khi phát hiện biển báo đầu tiên.</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const videoInput = document.getElementById('videoInput');
+        const fileChip = document.getElementById('fileChip');
+        const fileName = document.getElementById('fileName');
+        const startBtn = document.getElementById('startBtn');
+        const flashBox = document.getElementById('flashBox');
+        const uploadCard = document.getElementById('uploadCard');
+        const uploadCollapsed = document.getElementById('uploadCollapsed');
+        const collapsedFileName = document.getElementById('collapsedFileName');
+        const vStage = document.getElementById('vStage');
+        const liveStream = document.getElementById('liveStream');
+        const frameEmpty = document.getElementById('frameEmpty');
+        const liveDot = document.getElementById('liveDot');
+        const liveStatusText = document.getElementById('liveStatusText');
+        const heroStatusText = document.getElementById('heroStatusText');
+
+        let pollTimer = null;
+        let lastSignsSignature = '';
+        let currentSessionId = null;
+        let isPaused = false;
+        let durationSec = 0;
+        let isMuted = false;
+        let knownSignKeys = new Set(); // để biết mục nào là MỚI khi thêm vào feed
+
+        const pauseBtn = document.getElementById('pauseBtn');
+        const rescanBtn = document.getElementById('rescanBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const audioSync = document.getElementById('audioSync');
+        const seekbarTrack = document.getElementById('seekbarTrack');
+        const seekbarFill = document.getElementById('seekbarFill');
+        const seekbarThumb = document.getElementById('seekbarThumb');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const videoHero = document.getElementById('videoHero');
+
+        function formatTime(sec) {
+            sec = Math.max(0, Math.floor(sec || 0));
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        function updateSeekbar(currentSec, totalSec) {
+            durationSec = totalSec || durationSec;
+            const pct = durationSec ? Math.min(100, (currentSec / durationSec) * 100) : 0;
+            seekbarFill.style.width = pct + '%';
+            seekbarThumb.style.left = pct + '%';
+            timeDisplay.textContent = formatTime(currentSec) + ' / ' + formatTime(durationSec);
+        }
+
+        seekbarTrack.addEventListener('click', (e) => {
+            if (!currentSessionId || !durationSec) return;
+            const rect = seekbarTrack.getBoundingClientRect();
+            const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+            const targetSec = ratio * durationSec;
+            updateSeekbar(targetSec, durationSec);
+            audioSync.currentTime = targetSec;
+            fetch('/video/control/' + currentSessionId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'seek_to', time: targetSec })
+            });
+        });
+
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            audioSync.muted = isMuted;
+            muteBtn.innerHTML = isMuted ? '&#128263;' : '&#128266;';
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) { videoHero.requestFullscreen(); }
+            else { document.exitFullscreen(); }
+        });
+
+        videoInput.addEventListener('change', () => {
+            if (videoInput.files.length > 0) {
+                fileName.textContent = videoInput.files[0].name;
+                fileChip.style.display = 'inline-flex';
+            }
+        });
+        ['dragover', 'dragenter'].forEach(evt => {
+            dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+            dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+        });
+        dropzone.addEventListener('drop', (e) => {
+            if (e.dataTransfer.files.length > 0) {
+                videoInput.files = e.dataTransfer.files;
+                fileName.textContent = e.dataTransfer.files[0].name;
+                fileChip.style.display = 'inline-flex';
+            }
+        });
+
+        function showFlash(msg) { flashBox.innerHTML = '<div class="flash">' + msg + '</div>'; }
+
+        function resetUpload() {
+            if (pollTimer) clearInterval(pollTimer);
+            vStage.classList.remove('is-active');
+            uploadCollapsed.style.display = 'none';
+            uploadCard.style.display = 'block';
+            videoInput.value = '';
+            fileChip.style.display = 'none';
+            startBtn.disabled = false;
+            startBtn.textContent = 'Bắt đầu quét trực tiếp';
+        }
+
+        function startDetection() {
+            if (!videoInput.files || videoInput.files.length === 0) {
+                showFlash('Vui lòng chọn một video trước khi bắt đầu.');
+                return;
+            }
+            flashBox.innerHTML = '';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Đang tải video lên...';
+
+            const formData = new FormData();
+            formData.append('video', videoInput.files[0]);
+
+            fetch('/video/upload', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        showFlash(data.error);
+                        startBtn.disabled = false;
+                        startBtn.textContent = 'Bắt đầu quét trực tiếp';
+                        return;
+                    }
+                    const sessionId = data.session_id;
+                    currentSessionId = sessionId;
+                    isPaused = false;
+                    pauseBtn.innerHTML = '&#9208;';
+                    durationSec = data.duration_sec || 0;
+                    updateSeekbar(0, durationSec);
+                    knownSignKeys = new Set();
+
+                    collapsedFileName.textContent = videoInput.files[0].name;
+                    uploadCard.style.display = 'none';
+                    uploadCollapsed.style.display = 'flex';
+                    vStage.classList.add('is-active');
+
+                    frameEmpty.style.display = 'none';
+                    liveStream.style.display = 'block';
+                    liveStream.src = '/video/stream/' + sessionId + '?t=' + Date.now();
+                    liveDot.style.color = 'var(--danger)';
+                    liveStatusText.textContent = 'Đang quét trực tiếp...';
+
+                    audioSync.src = '/static/uploads/' + data.filename;
+                    audioSync.muted = isMuted;
+                    audioSync.play().catch(() => {});
+
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                    lastSignsSignature = '';
+                    pollTimer = setInterval(() => pollStatus(sessionId), 1000);
+                })
+                .catch(() => {
+                    showFlash('Có lỗi khi tải video lên. Thử lại nhé.');
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Bắt đầu quét trực tiếp';
+                });
+        }
+
+        function pollStatus(sessionId) {
+            fetch('/video/status/' + sessionId)
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('statCount').textContent = data.count;
+                    document.getElementById('statFrames').textContent = data.processed_frames;
+                    document.getElementById('statElapsed').textContent = data.elapsed + 's';
+                    document.getElementById('statStatus').textContent = data.status === 'done' ? 'Đã hoàn tất' : 'Đang quét...';
+                    heroStatusText.textContent = 'Khung hình: ' + data.processed_frames + ' \u00b7 ' + data.elapsed + 's';
+                    updateSeekbar(audioSync.currentTime || data.current_pos_sec, data.duration_sec);
+
+                    const signature = JSON.stringify(data.signs.map(s => s.class_name + ':' + s.confidence));
+                    if (signature !== lastSignsSignature) {
+                        lastSignsSignature = signature;
+                        renderFeedCount(data.count);
+                        renderGroups(data.group_summary, data.count);
+                        renderColumns(data.columns);
+                        renderLatestCapture(data.signs);
+                        renderFeed(data.signs);
+                    }
+
+                    if (data.status === 'done') {
+                        clearInterval(pollTimer);
+                        liveDot.style.color = 'var(--success)';
+                        liveStatusText.textContent = 'Đã quét xong toàn bộ video';
+                        document.querySelector('.v-live-pill .dot').style.animation = 'none';
+                        document.querySelector('.v-live-pill').innerHTML = '&#10003; Đã quét xong';
+                    }
+                });
+        }
+
+        const groupColors = {
+            'Biển cấm': 'var(--danger)', 'Biển nguy hiểm': 'var(--warning)',
+            'Biển hiệu lệnh': 'var(--info)', 'Biển chỉ dẫn': 'var(--success)', 'Biển phụ': 'var(--neutral)',
+        };
+
+        function renderFeedCount(n) { document.getElementById('feedCount').textContent = n; }
+
+        function renderGroups(groupSummary, total) {
+            const box = document.getElementById('groupBreakdown');
+            const keys = Object.keys(groupSummary || {});
+            if (keys.length === 0) { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            let html = '';
+            keys.forEach(label => {
+                const count = groupSummary[label];
+                const color = groupColors[label] || 'var(--neutral)';
+                const pct = total ? (count / total * 100) : 0;
+                html += `
+                    <div class="v-group-row">
+                        <div class="v-group-name">${label}</div>
+                        <div class="v-group-track"><div class="v-group-fill" style="width:${pct}%; background:${color};"></div></div>
+                        <div class="v-group-num">${count}</div>
+                    </div>`;
+            });
+            box.innerHTML = html;
+        }
+
+        function renderLatestCapture(signs) {
+            const box = document.getElementById('latestCapture');
+            if (!signs || signs.length === 0) {
+                box.innerHTML = '<div class="v-feed-latest-empty">Chưa chụp được biển báo nào.</div>';
+                return;
+            }
+            const latest = signs[signs.length - 1];
+            const imgHtml = latest.thumbnail_url ? `<img src="${latest.thumbnail_url}">` : '';
+            box.innerHTML = `
+                ${imgHtml}
+                <div class="v-feed-latest-code">${latest.class_name}</div>
+                <div class="v-feed-latest-name">${latest.sign_name}</div>
+                <span class="badge badge-${latest.badge}" style="margin-bottom:8px; display:inline-block;">${latest.group_label}</span>
+                <div class="v-feed-latest-meaning"><strong>${latest.confidence}%</strong> &middot; ${latest.meaning || latest.group_description || ''}</div>`;
+        }
+
+        // Nhật ký trực tiếp: prepend mục MỚI lên đầu, giữ nguyên các mục cũ đã có
+        function renderFeed(signs) {
+            const list = document.getElementById('feedList');
+            if (!signs || signs.length === 0) {
+                list.innerHTML = '<div class="v-feed-empty">Nhật ký sẽ hiện ở đây ngay khi phát hiện biển báo đầu tiên.</div>';
+                return;
+            }
+            signs.forEach(s => {
+                const key = s.class_name;
+                if (knownSignKeys.has(key)) return; // đã có trong nhật ký, chỉ ảnh/độ tin cậy cập nhật ở "Phát hiện gần nhất"
+                knownSignKeys.add(key);
+
+                const emptyMsg = list.querySelector('.v-feed-empty');
+                if (emptyMsg) emptyMsg.remove();
+
+                const imgHtml = s.thumbnail_url
+                    ? `<img src="${s.thumbnail_url}" class="v-feed-thumb" loading="lazy">`
+                    : `<div class="v-feed-thumb-empty">&#128247;</div>`;
+
+                const item = document.createElement('div');
+                item.className = 'v-feed-item is-new';
+                item.innerHTML = `
+                    ${imgHtml}
+                    <div class="v-feed-item-body">
+                        <div class="v-feed-item-name">${s.sign_name}</div>
+                        <div class="v-feed-item-sub">${s.class_name} &middot; ${s.group_label}</div>
+                    </div>
+                    <div class="v-feed-item-conf">${s.confidence}%</div>`;
+                list.prepend(item);
+            });
+        }
+
+        function renderColumns(columns) {
+            const box = document.getElementById('signColumns');
+            if (!columns || columns.length === 0) {
+                box.innerHTML = '<div class="empty-state">Chưa phát hiện biển báo nào.</div>';
+                return;
+            }
+            let html = '';
+            columns.forEach(col => {
+                let cardsHtml = '';
+                col.signs.forEach(s => {
+                    const imgHtml = s.thumbnail_url
+                        ? `<img src="${s.thumbnail_url}" class="sign-col-card-thumb" loading="lazy">`
+                        : `<div class="sign-col-card-thumb-empty">&#128247;</div>`;
+                    const copyBtnHtml = s.thumbnail_url
+                        ? `<button type="button" class="btn copy-img-btn" data-img="${s.thumbnail_url}" style="margin:8px 10px 10px; font-size:11px; padding:6px 10px;" onclick="copySignImage(this)">&#128203; Sao chép ảnh</button>`
+                        : '';
+                    cardsHtml += `
+                        <div class="sign-col-card">
+                            <div class="sign-col-card-top">
+                                ${imgHtml}
+                                <div class="sign-col-card-info">
+                                    <div class="sign-col-card-code">${s.class_name}</div>
+                                    <div class="sign-col-card-name">${s.sign_name}</div>
+                                    <div class="sign-col-card-conf">
+                                        <div class="sign-col-card-conf-track"><div class="sign-col-card-conf-fill" style="width:${s.confidence}%;"></div></div>
+                                        <span>${s.confidence}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="sign-col-card-meaning">${s.meaning || s.group_description || ''}</div>
+                            ${copyBtnHtml}
+                        </div>`;
+                });
+                html += `
+                    <div class="sign-column">
+                        <div class="sign-column-header">
+                            <span class="badge badge-${col.badge}">${col.label}</span>
+                            <span class="sign-column-title"></span>
+                            <span class="sign-column-count">${col.signs.length}</span>
+                        </div>
+                        <div class="sign-column-list">${cardsHtml}</div>
+                    </div>`;
+            });
+            box.innerHTML = html;
+        }
+
+        pauseBtn.addEventListener('click', () => {
+            if (!currentSessionId) return;
+            const action = isPaused ? 'resume' : 'pause';
+            fetch('/video/control/' + currentSessionId, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action })
+            }).then(() => {
+                isPaused = !isPaused;
+                pauseBtn.innerHTML = isPaused ? '&#9654;' : '&#9208;';
+                if (isPaused) { audioSync.pause(); } else { audioSync.play().catch(() => {}); }
+            });
+        });
+
+        async function copySignImage(btn) {
+            const url = btn.dataset.img;
+            try {
+                const resp = await fetch(url);
+                const blob = await resp.blob();
+                const bitmap = await createImageBitmap(blob);
+                const canvas = document.createElement('canvas');
+                canvas.width = bitmap.width; canvas.height = bitmap.height;
+                canvas.getContext('2d').drawImage(bitmap, 0, 0);
+                canvas.toBlob(async (pngBlob) => {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+                    const old = btn.textContent;
+                    btn.textContent = '✓ Đã sao chép';
+                    setTimeout(() => { btn.textContent = old; }, 1500);
+                }, 'image/png');
+            } catch (err) {
+                alert('Trình duyệt không hỗ trợ sao chép ảnh tự động. Bạn có thể chuột phải vào ảnh và chọn "Copy image" thủ công.');
+            }
+        }
+
+        rescanBtn.addEventListener('click', () => {
+            if (!currentSessionId) return;
+            if (pollTimer) clearInterval(pollTimer);
+            fetch('/video/reset/' + currentSessionId, { method: 'POST' })
+                .then(() => {
+                    liveStream.src = '/video/stream/' + currentSessionId + '?t=' + Date.now();
+                    isPaused = false;
+                    pauseBtn.innerHTML = '&#9208;';
+                    audioSync.currentTime = 0;
+                    audioSync.play().catch(() => {});
+                    updateSeekbar(0, durationSec);
+                    liveDot.style.color = 'var(--danger)';
+                    liveStatusText.textContent = 'Đang quét trực tiếp...';
+                    document.querySelector('.v-live-pill').innerHTML = '<span class="dot"></span> Đang quét trực tiếp';
+
+                    knownSignKeys = new Set();
+                    lastSignsSignature = '';
+                    renderFeedCount(0);
+                    renderGroups({}, 0);
+                    renderColumns([]);
+                    renderLatestCapture([]);
+                    document.getElementById('feedList').innerHTML = '<div class="v-feed-empty">Nhật ký sẽ hiện ở đây ngay khi phát hiện biển báo đầu tiên.</div>';
+
+                    pollTimer = setInterval(() => pollStatus(currentSessionId), 1000);
+                });
+        });
+    </script>
+    <script src="{{ url_for('static', filename='theme-toggle.js') }}"></script>
+</body>
+</html>

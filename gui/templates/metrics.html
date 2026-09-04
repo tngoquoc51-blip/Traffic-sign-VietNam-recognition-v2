@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Đánh giá model — TrafficVision AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">TV</div>
+        <a href="{{ url_for('dashboard') }}" title="Tổng quan">&#9635;</a>
+        <a href="{{ url_for('detect') }}" title="Nhận diện ảnh">&#9889;</a>
+        <a href="{{ url_for('video') }}" title="Nhận diện video">&#9654;</a>
+        <a href="{{ url_for('history') }}" title="Lịch sử">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3z"/>
+                <path d="M12 8v5l4.28 2.54.72-1.21-3.5-2.08V8z"/>
+            </svg>
+        </a>
+        <a href="{{ url_for('metrics') }}" class="active" title="Đánh giá model">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M5 21V10h3v11H5zm5.5 0V3h3v18h-3zM16 21v-7h3v7h-3z"/>
+            </svg>
+        </a>
+        <div class="sidebar-spacer"></div>
+        <a href="{{ url_for('logout') }}" class="sidebar-logout" title="Đăng xuất">&#9211;</a>
+    </div>
+
+    <div class="main">
+        <div class="header-row">
+            <div>
+                <div class="eyebrow">TrafficVision AI &middot; Đánh giá độ chính xác model</div>
+                <h1>Hiệu suất model nhận diện</h1>
+            </div>
+            <div class="btn-row">
+                <a href="{{ url_for('dashboard') }}" class="btn">&larr; Về tổng quan</a>
+            </div>
+        </div>
+
+        {% if not has_data %}
+        <div class="card">
+            <div class="empty-state">
+                Chưa có kết quả đánh giá.<br>
+                Hãy chạy <code style="background:var(--bg); border:1px solid var(--border); padding:2px 8px; border-radius:6px;">python src/evaluate.py</code>
+                từ thư mục gốc dự án để tạo báo cáo, sau đó tải lại trang này.
+            </div>
+        </div>
+        {% else %}
+
+        <div class="stat-grid">
+            <div class="card">
+                <div class="stat-label">mAP50</div>
+                <div class="stat-value">{{ (summary.map50 * 100)|round(1) }}%</div>
+                <div class="stat-sub">Độ chính xác trung bình ở ngưỡng IoU 0.5</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">mAP50-95</div>
+                <div class="stat-value">{{ (summary.map50_95 * 100)|round(1) }}%</div>
+                <div class="stat-sub">Độ chính xác trung bình, đánh giá khắt khe hơn</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">Precision</div>
+                <div class="stat-value">{{ (summary.precision * 100)|round(1) }}%</div>
+                <div class="stat-sub">Tỉ lệ đoán đúng trong số lần đoán có biển</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">Recall</div>
+                <div class="stat-value">{{ (summary.recall * 100)|round(1) }}%</div>
+                <div class="stat-sub">Tỉ lệ tìm ra được trong số biển thật có</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom:24px;">
+            <div class="section-title">Thông tin lần đánh giá</div>
+            <div class="system-pill-row">
+                <span class="system-pill">Đánh giá lúc: {{ summary.evaluated_at.replace('T', ' ') }}</span>
+                <span class="system-pill">{{ summary.num_classes_evaluated }} lớp biển có trong tập test</span>
+                <span class="system-pill">Model: {{ summary.model_path.split('/')[-1].split('\\\\')[-1] }}</span>
+            </div>
+        </div>
+
+        {% if charts.confusion_matrix or charts.confusion_matrix_normalized %}
+        <div class="grid-2" style="margin-bottom:24px;">
+            {% if charts.confusion_matrix %}
+            <div class="card">
+                <div class="section-title">Confusion Matrix</div>
+                <img src="{{ url_for('metrics_chart', filename=charts.confusion_matrix) }}" class="result-image" alt="Confusion matrix">
+            </div>
+            {% endif %}
+            {% if charts.confusion_matrix_normalized %}
+            <div class="card">
+                <div class="section-title">Confusion Matrix (chuẩn hoá %)</div>
+                <img src="{{ url_for('metrics_chart', filename=charts.confusion_matrix_normalized) }}" class="result-image" alt="Confusion matrix normalized">
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if charts.pr_curve or charts.f1_curve %}
+        <div class="grid-2" style="margin-bottom:24px;">
+            {% if charts.pr_curve %}
+            <div class="card">
+                <div class="section-title">Precision-Recall Curve</div>
+                <img src="{{ url_for('metrics_chart', filename=charts.pr_curve) }}" class="result-image" alt="PR curve">
+            </div>
+            {% endif %}
+            {% if charts.f1_curve %}
+            <div class="card">
+                <div class="section-title">F1 Curve</div>
+                <img src="{{ url_for('metrics_chart', filename=charts.f1_curve) }}" class="result-image" alt="F1 curve">
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="section-title">Chi tiết theo từng loại biển (yếu nhất trước)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Mã biển</th>
+                        <th>AP50</th>
+                        <th>AP50-95</th>
+                        <th>Precision</th>
+                        <th>Recall</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in summary.per_class %}
+                    <tr>
+                        <td><span class="history-code">{{ row.class_name }}</span></td>
+                        <td>
+                            <div class="conf-cell">
+                                <div class="conf-track"><div class="conf-fill" style="width:{{ (row.ap50 * 100) if row.ap50 else 0 }}%;"></div></div>
+                                <span>{{ (row.ap50 * 100)|round(1) if row.ap50 is not none else '—' }}%</span>
+                            </div>
+                        </td>
+                        <td>{{ (row.ap50_95 * 100)|round(1) if row.ap50_95 is not none else '—' }}%</td>
+                        <td>{{ (row.precision * 100)|round(1) if row.precision is not none else '—' }}%</td>
+                        <td>{{ (row.recall * 100)|round(1) if row.recall is not none else '—' }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% endif %}
+    </div>
+
+    <script src="{{ url_for('static', filename='theme-toggle.js') }}"></script>
+</body>
+</html>

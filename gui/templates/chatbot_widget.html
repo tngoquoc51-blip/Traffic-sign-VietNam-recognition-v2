@@ -1,0 +1,223 @@
+<!--
+  chatbot_widget.html
+  ---------------------
+  Widget chatbot tra cứu biển báo dạng bong bóng nổi (floating chat bubble),
+  chèn vào TẤT CẢ các trang bằng Jinja include, ví dụ trong dashboard.html,
+  ngay trước </body>:
+
+  Cách hoạt động: đây là chatbot TRA CỨU (rule-based/tìm kiếm mờ trên dữ
+  liệu 58 mã biển báo có sẵn), KHÔNG phải chatbot AI/LLM — nên không cần
+  API key, không tốn phí, chạy hoàn toàn offline trong trình duyệt.
+  Nếu sau này muốn nâng cấp thành chatbot AI thật (trả lời tự nhiên hơn),
+  cần tích hợp thêm API của một mô hình ngôn ngữ — phần đó nằm ngoài phạm
+  vi widget này.
+
+  Yêu cầu backend: cần route GET /api/classes.json trả về danh sách 58 mã
+  biển dạng JSON (xem classes_json_route_snippet.py đi kèm).
+-->
+<style>
+  :root{
+    --cb-bg:#14151F; --cb-panel:#1B1D2A; --cb-line:#242637;
+    --cb-ink:#F2F3F7; --cb-ink-mute:#8B8FA3;
+    --cb-violet:#8B5CF6; --cb-violet-dark:#6D4AEA; --cb-cyan:#28D9E8;
+  }
+  #cbBubble{
+    position:fixed; right:24px; bottom:24px; z-index:9999;
+    width:56px; height:56px; border-radius:50%;
+    background:linear-gradient(135deg, var(--cb-violet), var(--cb-violet-dark));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 30px rgba(139,92,246,.45);
+    cursor:pointer; font-size:22px; border:none;
+  }
+  #cbBubble .pulse{
+    position:absolute; inset:-4px; border-radius:50%;
+    border:2px solid var(--cb-violet); opacity:0; animation:cb-pulse 2.4s infinite;
+  }
+  @keyframes cb-pulse{0%{transform:scale(.9); opacity:.6;} 100%{transform:scale(1.4); opacity:0;}}
+
+  #cbPanel{
+    position:fixed; right:24px; bottom:92px; z-index:9999;
+    width:340px; max-height:480px; background:var(--cb-bg);
+    border:1px solid var(--cb-line); border-radius:18px; overflow:hidden;
+    display:none; flex-direction:column;
+    box-shadow:0 30px 70px rgba(0,0,0,.5);
+    font-family:'Inter',sans-serif;
+  }
+  #cbPanel.open{display:flex;}
+
+  #cbHead{
+    padding:14px 16px; background:linear-gradient(135deg, rgba(139,92,246,.18), rgba(40,217,232,.1));
+    border-bottom:1px solid var(--cb-line);
+    display:flex; align-items:center; gap:10px;
+  }
+  #cbHead .avatar{width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,var(--cb-violet),var(--cb-violet-dark)); display:flex; align-items:center; justify-content:center; font-size:15px;}
+  #cbHead .title{font-family:'Inter'; font-weight:700; font-size:13.5px; color:var(--cb-ink);}
+  #cbHead .sub{font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cb-ink-mute);}
+  #cbClose{margin-left:auto; background:none; border:none; color:var(--cb-ink-mute); font-size:16px; cursor:pointer;}
+
+  #cbBody{flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px;}
+  .cb-msg{max-width:85%; padding:10px 12px; border-radius:12px; font-size:12.5px; line-height:1.55;}
+  .cb-msg.bot{background:var(--cb-panel); color:var(--cb-ink); align-self:flex-start; border-bottom-left-radius:4px;}
+  .cb-msg.user{background:linear-gradient(135deg,var(--cb-violet),var(--cb-violet-dark)); color:#fff; align-self:flex-end; border-bottom-right-radius:4px;}
+  .cb-msg .code{font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--cb-cyan);}
+  .cb-suggest{display:flex; gap:6px; flex-wrap:wrap; margin-top:2px;}
+  .cb-suggest button{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--cb-ink-mute);
+    background:var(--cb-panel); border:1px solid var(--cb-line); border-radius:999px;
+    padding:5px 10px; cursor:pointer;
+  }
+
+  #cbInputRow{display:flex; gap:8px; padding:12px; border-top:1px solid var(--cb-line); background:var(--cb-bg);}
+  #cbInput{
+    flex:1; background:var(--cb-panel); border:1px solid var(--cb-line); border-radius:10px;
+    padding:10px 12px; color:var(--cb-ink); font-family:'Inter'; font-size:12.5px;
+  }
+  #cbInput:focus{outline:none; border-color:var(--cb-violet);}
+  #cbSend{
+    width:38px; border-radius:10px; border:none; cursor:pointer;
+    background:linear-gradient(135deg,var(--cb-violet),var(--cb-violet-dark)); color:#fff; font-size:14px;
+  }
+</style>
+
+<button id="cbBubble"><span class="pulse"></span>💬</button>
+
+<div id="cbPanel">
+  <div id="cbHead">
+    <div class="avatar">🚦</div>
+    <div>
+      <div class="title">Trợ lý tra cứu biển báo</div>
+      <div class="sub">Gõ mã biển hoặc từ khoá — VD: "P.127" hoặc "trẻ em"</div>
+    </div>
+    <button id="cbClose">✕</button>
+  </div>
+  <div id="cbBody"></div>
+  <div id="cbInputRow">
+    <input id="cbInput" type="text" placeholder="Nhập mã biển, từ khoá, hoặc dán (Ctrl+V) ảnh vừa sao chép...">
+    <button id="cbSend">➤</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const bubble = document.getElementById("cbBubble");
+  const panel = document.getElementById("cbPanel");
+  const closeBtn = document.getElementById("cbClose");
+  const body = document.getElementById("cbBody");
+  const input = document.getElementById("cbInput");
+  const sendBtn = document.getElementById("cbSend");
+
+  let classesData = null;
+  let loaded = false;
+
+  // Khớp đúng GROUP_MAP thật trong web_app.py: S = Chỉ dẫn, DP = Phụ (không có tiền tố "I")
+  const GROUP_NAME = { P:"Biển cấm", W:"Biển nguy hiểm", R:"Biển hiệu lệnh", S:"Biển chỉ dẫn", DP:"Biển phụ" };
+
+  function addMsg(html, who){
+    const div = document.createElement("div");
+    div.className = "cb-msg " + who;
+    div.innerHTML = html;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  async function ensureLoaded(){
+    if (loaded) return;
+    try {
+      const res = await fetch("/api/classes.json");
+      classesData = await res.json();
+      loaded = true;
+    } catch(e) {
+      classesData = [];
+      addMsg("⚠ Chưa kết nối được dữ liệu biển báo (route <code>/api/classes.json</code>). Xem file <code>classes_json_route_snippet.py</code> để gắn route này vào app.py.", "bot");
+    }
+  }
+
+  function search(query){
+    const q = query.trim().toLowerCase();
+    if (!q || !classesData) return [];
+    return classesData.filter(c =>
+      c.code.toLowerCase().includes(q) ||
+      (c.meaning || "").toLowerCase().includes(q)
+    ).slice(0, 5);
+  }
+
+  async function handleSend(){
+    const text = input.value.trim();
+    if (!text) return;
+    addMsg(text, "user");
+    input.value = "";
+
+    await ensureLoaded();
+    const results = search(text);
+
+    if (!results.length) {
+      addMsg(`Không tìm thấy biển báo nào khớp với "<b>${text}</b>". Thử gõ đúng mã (VD: P.127) hoặc từ khoá tiếng Việt (VD: "trẻ em", "tốc độ").`, "bot");
+      return;
+    }
+
+    const html = results.map(c => {
+      const prefix = c.code.split(".")[0];
+      const group = c.group || GROUP_NAME[prefix] || "Không rõ nhóm";
+      return `<div style="margin-bottom:8px;"><span class="code">${c.code}</span> — ${c.meaning}<br><span style="color:var(--cb-ink-mute); font-size:10.5px;">${group}</span></div>`;
+    }).join("");
+
+    addMsg(`Tìm thấy ${results.length} kết quả:<br>${html}`, "bot");
+  }
+
+  bubble.addEventListener("click", async () => {
+    panel.classList.add("open");
+    if (!body.childElementCount) {
+      addMsg("Xin chào 👋 Mình là trợ lý tra cứu biển báo giao thông Việt Nam. Bạn có thể hỏi theo mã (VD: P.127) hoặc mô tả (VD: \"biển trẻ em\").", "bot");
+      await ensureLoaded();
+    }
+  });
+  closeBtn.addEventListener("click", () => panel.classList.remove("open"));
+  sendBtn.addEventListener("click", handleSend);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") handleSend(); });
+
+  async function handlePastedImage(file) {
+    const imgUrl = URL.createObjectURL(file);
+    addMsg(`<img src="${imgUrl}" style="max-width:100%; border-radius:8px;">`, "user");
+    addMsg("⏳ Đang kiểm tra ảnh với model...", "bot");
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await fetch("/api/chat_verify", { method: "POST", body: formData });
+      const data = await res.json();
+      body.lastChild.remove(); // xoá dòng "đang kiểm tra"
+
+      if (data.error) {
+        addMsg(`⚠ ${data.error}`, "bot");
+        return;
+      }
+      if (!data.signs || !data.signs.length) {
+        addMsg("Model không nhận diện được biển báo Việt Nam nào trong ảnh này.", "bot");
+        return;
+      }
+
+      const html = data.signs.map(s => {
+        const thumb = s.thumbnail_url ? `<img src="${s.thumbnail_url}" style="width:100%; border-radius:8px; margin-bottom:6px;">` : "";
+        return `<div style="margin-bottom:10px;">${thumb}<span class="code">${s.class_name}</span> — ${s.sign_name} (${s.confidence}%)<br>${s.meaning || ""}</div>`;
+      }).join("");
+
+      addMsg(`✅ Kết quả kiểm tra thật từ model:<br>${html}`, "bot");
+    } catch (err) {
+      body.lastChild.remove();
+      addMsg("⚠ Không kết nối được server để kiểm tra ảnh.", "bot");
+    }
+  }
+
+  input.addEventListener("paste", (e) => {
+    const items = e.clipboardData.items;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        handlePastedImage(item.getAsFile());
+        return;
+      }
+    }
+  });
+})();
+</script>
